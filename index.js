@@ -32,36 +32,35 @@ module.exports = class ApiGatewayCleanStage {
 		currentStageName = stageNameStage? stageNameStage: stageNameDeployment;
 
 		Promise.resolve()
-				.then(() => new Promise(resolve => setTimeout(() => resolve(), 60000)))
-				.then(()=>{
-						return this.getRestApiId()
-						.then( restApiId => {
-								return this.apiGateway.getStages({
-										restApiId
+			.then(()=>{
+				return this.getRestApiId()
+				.then( restApiId => {
+					return this.apiGateway.getStages({
+						restApiId
+					})
+					.promise()
+					.then((data) => {
+						const apiGateway = this.apiGateway;
+						return data.item.forEach(function(item){
+							if (item.stageName !== currentStageName) {
+								return apiGateway.deleteStage({
+									restApiId: restApiId,
+									stageName: item.stageName
 								})
 								.promise()
-								.then((data) => {
-										const apiGateway = this.apiGateway;
-										return data.item.forEach(function(item){
-												if (item.stageName !== currentStageName) {
-														return apiGateway.deleteStage({
-																restApiId: restApiId,
-																stageName: item.stageName
-														})
-														.promise()
-														.then(() => '    Deleted stage: ' + item.stageName);
-												}
-										});
-								})
-						})
-				});
+								.then(() => '    Deleted stage: ' + item.stageName);
+							}
+						});
+					})
+				})
+			});
 	}
 
 	getRestApiId(){
 		const apiName = this.provider.naming.getApiGatewayName();
 		return this.apiGateway.getRestApis()
-						.promise()
-						.then( apis => apis.items.find(api => api.name === apiName).id);
+					.promise()
+					.then( apis => apis.items.find(api => api.name === apiName).id);
 	}
 
 }
