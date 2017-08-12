@@ -17,19 +17,7 @@ module.exports = class ApiGatewayCleanStage {
 
 	deleteUselessStages(){
 		this.serverless.cli.log('Starting delete useless stages...');
-
-		const template = this.serverless.service.provider.compiledCloudFormationTemplate;
-		let currentStageName, stageNameStage, stageNameDeployment;
-		Object.keys(template.Resources).forEach(function(key){
-			if (template.Resources[key]['Type'] == 'AWS::ApiGateway::Stage') {
-				stageNameStage = template.Resources[key].Properties.StageName;
-			}
-			if (template.Resources[key]['Type'] == 'AWS::ApiGateway::Deployment') {
-				stageNameDeployment = template.Resources[key].Properties.StageName;
-			}
-		});
-
-		currentStageName = stageNameStage? stageNameStage: stageNameDeployment;
+		const currentStageName = this.getApiGatewayStageName();
 
 		Promise.resolve()
 			.then(()=>{
@@ -62,5 +50,19 @@ module.exports = class ApiGatewayCleanStage {
 					.promise()
 					.then( apis => apis.items.find(api => api.name === apiName).id);
 	}
+
+	getApiGatewayStageName() {
+		const template = this.serverless.service.provider.compiledCloudFormationTemplate;
+		let stageNameStage, stageNameDeploy;
+		Object.keys(template.Resources).forEach(function(key){
+			if (template.Resources[key]['Type'] == 'AWS::ApiGateway::Stage') {
+				stageNameStage = template.Resources[key].Properties.StageName;
+			}
+			if (template.Resources[key]['Type'] == 'AWS::ApiGateway::Deployment') {
+				stageNameDeploy = template.Resources[key].Properties.StageName;
+			}
+		});
+		return stageNameStage? stageNameStage: stageNameDeploy;
+  }
 
 }
