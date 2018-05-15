@@ -6,55 +6,64 @@ module.exports = class ApiGatewayCleanStage {
 		this.serverless = serverless;
 		this.options = options;
 		this.provider = this.serverless.getProvider('aws');
-		this.apiGateway = new this.provider.sdk.APIGateway({
-			region: this.options.region?this.options.region:'us-east-1'
-		});
 
 		this.hooks = {
-			'after:aws:deploy:finalize:cleanup': this.deleteUselessStages.bind(this),
+			'after:aws:deploy:finalize:cleanup': this.deleteUnusedStages.bind(this),
 		};
 	}
 
-	deleteUselessStages(){
-		this.serverless.cli.log('Starting delete useless stages...');
-		const currentStageName = this.getApiGatewayStageName();
+	deleteUnusedStages() {
+		this.serverless.cli.log('Starting delete unused stages...');
 
-		Promise.resolve()
-			.then(()=>{
-				return this.getRestApiId()
-				.then( restApiId => {
-					return this.apiGateway.getStages({
-						restApiId
-					})
-					.promise()
-					.then((data) => {
-						const apiGateway = this.apiGateway;
-						return data.item.forEach(function(item){
-							if (item.stageName !== currentStageName) {
-								return apiGateway.deleteStage({
-									restApiId: restApiId,
-									stageName: item.stageName
-								})
-								.promise()
-								.then(() => '    Deleted stage: ' + item.stageName);
-							}
-						});
-					})
-				})
+		return Promise.resolve()
+			.then(() => {
+				return this.getRestApiId();
+			})
+			.then(restApiId => {
+				const { compiledCloudFormationTemplate } = this.serverless.service.provider;
+				const currentStageName = this.getApiGatewayStageName(compiledCloudFormationTemplate);
+				
+				return this.getUnusedStages(restApiId, currentStageName)
+					.then(unusedStages => {
+						return this.deleteStages(restApiId, unusedStages);
+					});
 			});
 	}
 
-	getRestApiId(){
+	getRestApiId() {
 		const apiName = this.provider.naming.getApiGatewayName();
-		return this.apiGateway.getRestApis()
-					.promise()
-					.then( apis => apis.items.find(api => api.name === apiName).id);
+
+		return this.provider.request('ApiGateway', 'getRestApis', {})
+					.then(apis => apis.items.find(api => api.name === apiName).id);
 	}
 
-	getApiGatewayStageName() {
-		const template = this.serverless.service.provider.compiledCloudFormationTemplate;
+	getUnusedStages(restApiId, currentStageName) {
+		return this.provider.request('ApiGateway', 'getStages', {
+			restApiId
+		})
+		.then(data => {
+			return data.item.filter(item => item.stageName !== currentStageName);
+		});
+	}
+
+	deleteStages(restApiId, stages) {
+		return stages.reduce((memo, stage) => {
+			return memo.then(() => {
+				const { stageName } = stage;
+
+				return this.provider.request('ApiGateway', 'deleteStage', {
+					restApiId,
+					stageName
+				})
+				.then(() => `    Deleted stage: ${stageName}`);
+			});
+		}, Promise.resolve());
+	}
+
+	getApiGatewayStageName(template) {
 		let stageNameStage, stageNameDeploy;
-		Object.keys(template.Resources).forEach(function(key){
+
+		Object.keys(template.Resources).forEach(key => {
 			if (template.Resources[key]['Type'] == 'AWS::ApiGateway::Stage') {
 				stageNameStage = template.Resources[key].Properties.StageName;
 			}
@@ -62,7 +71,8 @@ module.exports = class ApiGatewayCleanStage {
 				stageNameDeploy = template.Resources[key].Properties.StageName;
 			}
 		});
-		return stageNameStage? stageNameStage: stageNameDeploy;
+
+		return stageNameStage ? stageNameStage : stageNameDeploy;
   }
 
 }
