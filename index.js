@@ -33,12 +33,12 @@ module.exports = class ApiGatewayCleanStage {
 	getRestApiId() {
 		const apiName = this.provider.naming.getApiGatewayName();
 
-		return this.provider.request('ApiGateway', 'getRestApis', {})
+		return this.provider.request('APIGateway', 'getRestApis', {})
 					.then(apis => apis.items.find(api => api.name === apiName).id);
 	}
 
 	getUnusedStages(restApiId, currentStageName) {
-		return this.provider.request('ApiGateway', 'getStages', {
+		return this.provider.request('APIGateway', 'getStages', {
 			restApiId
 		})
 		.then(data => {
@@ -51,7 +51,7 @@ module.exports = class ApiGatewayCleanStage {
 			return memo.then(() => {
 				const { stageName } = stage;
 
-				return this.provider.request('ApiGateway', 'deleteStage', {
+				return this.provider.request('APIGateway', 'deleteStage', {
 					restApiId,
 					stageName
 				})
